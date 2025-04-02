@@ -431,6 +431,7 @@ const List = ({ token }) => {
         </div>
       )}
 
+
       {productToDelete && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
           <div className="bg-white p-8 rounded-xl shadow-2xl border border-gray-200 w-full max-w-sm mx-4">
