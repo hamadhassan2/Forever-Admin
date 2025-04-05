@@ -13,30 +13,37 @@ const Add = ({ token }) => {
 
   // Basic product fields
   const [name, setName] = useState("");
+  const [brandSuggestions, setBrandSuggestions] = useState([]);
+  const [filteredBrands, setFilteredBrands] = useState([]);
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [combo, setCombo] = useState(""); // New combo field
   const [discountPrice, setDiscountPrice] = useState("");
   const [category, setCategory] = useState("Men");
   const [subCategory, setSubCategory] = useState("");
   const [subCategorySuggestions, setSubCategorySuggestions] = useState([]);
   const [filteredSubCategories, setFilteredSubCategories] = useState([]);
   const [showSubCategorySuggestions, setShowSubCategorySuggestions] = useState(false);
-  const [color, setColor] = useState(""); // Color field
+  const [count, setCount] = useState("");
 
   // Other product fields
   const [bestseller, setBestseller] = useState(false);
-  const [sizes, setSizes] = useState([]);
-  const [sizeInput, setSizeInput] = useState(""); // Custom size input
-  const [count, setCount] = useState("");
 
-  // Age fields: admin can enter a single number or a range (e.g., "3-4")
-  const [ageValue, setAgeValue] = useState("");
-  const [ageUnit, setAgeUnit] = useState("Years"); // Unit selector: "Years" or "Months"
-  const [ages, setAges] = useState([]);
+  // Unified variants array (each variant: { size, age, ageUnit, quantity, color })
+  const [variants, setVariants] = useState([]);
+
+  // Unified variant input fields
+  const [variantSize, setVariantSize] = useState("");
+  const [variantAge, setVariantAge] = useState("");
+  const [variantAgeUnit, setVariantAgeUnit] = useState("Years");
+  const [variantQuantity, setVariantQuantity] = useState("");
+  const [variantColor, setVariantColor] = useState("");
 
   const [loading, setLoading] = useState(false);
 
-  // Fetch subcategories from the backend when the component mounts.
+  // Fetch distinct subcategories from the backend.
   useEffect(() => {
     async function fetchSubCategories() {
       try {
@@ -55,116 +62,46 @@ const Add = ({ token }) => {
     fetchSubCategories();
   }, []);
 
-  const onSubmitHandler = async (e) => {
-    e.preventDefault();
-
-    // Validate required fields and ensure at least one size or age is provided.
-    if (!name.trim() || !price || !count || (sizes.length === 0 && ages.length === 0)) {
-      toast.error("Please fill in all required fields. At least one size or age must be provided.");
-      return;
-    }
-
-    if (discountPrice && Number(discountPrice) >= Number(price)) {
-      toast.error("Discounted price must be less than the product price.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      formData.append("name", name);
-      formData.append("description", description);
-      formData.append("category", category);
-      formData.append("price", price);
-      if (discountPrice) {
-        formData.append("discountedPrice", discountPrice);
+  // Fetch distinct brand names from the backend.
+  useEffect(() => {
+    async function fetchBrandNames() {
+      try {
+        const response = await axios.get(`${backendUrl}/api/product/brands`);
+        if (response.data.success) {
+          setBrandSuggestions(response.data.brands);
+        } else {
+          setBrandSuggestions([]);
+          toast.error("Failed to load brand names");
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Error fetching brand names");
       }
-      formData.append("subCategory", subCategory);
-      formData.append("color", color);
-      formData.append("bestseller", bestseller);
-      formData.append("sizes", JSON.stringify(sizes));
-      formData.append("count", count);
+    }
+    fetchBrandNames();
+  }, []);
 
-      if (image1) formData.append("image1", image1);
-      if (image2) formData.append("image2", image2);
-      if (image3) formData.append("image3", image3);
-      if (image4) formData.append("image4", image4);
-
-      if (ages.length > 0) {
-        formData.append("ages", JSON.stringify(ages));
-      }
-
-      const response = await axios.post(
-        `${backendUrl}/api/product/add`,
-        formData,
-        { headers: { token } }
+  // Handlers for live brand suggestions.
+  const handleBrandChange = (e) => {
+    const value = e.target.value;
+    setName(value);
+    if (value) {
+      const filtered = brandSuggestions.filter((b) =>
+        b.toLowerCase().includes(value.toLowerCase())
       );
-      if (response.data.success) {
-        toast.success(response.data.message);
-        // Reset fields
-        setName("");
-        setDescription("");
-        setColor("");
-        setImage1(null);
-        setImage2(null);
-        setImage3(null);
-        setImage4(null);
-        setPrice("");
-        setDiscountPrice("");
-        setSizes([]);
-        setSizeInput("");
-        setAges([]);
-        setAgeValue("");
-        setAgeUnit("Years");
-        setCount("");
-        setSubCategory("");
-      } else {
-        toast.error(response.data.message);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message);
-    }
-    setLoading(false);
-  };
-
-  const addAge = () => {
-    const trimmedValue = ageValue.trim();
-    if (!trimmedValue) {
-      toast.error("Please enter an age value.");
-      return;
-    }
-    // Check if the input contains a hyphen (i.e., a range)
-    let ageString = "";
-    if (trimmedValue.includes("-")) {
-      // Split and validate both parts
-      const parts = trimmedValue.split("-");
-      if (parts.length !== 2 || isNaN(parts[0].trim()) || isNaN(parts[1].trim())) {
-        toast.error("Please enter a valid age range (e.g., 3-4).");
-        return;
-      }
-      ageString = `${trimmedValue} ${ageUnit}`;
+      setFilteredBrands(filtered);
     } else {
-      // Single numeric value validation
-      if (isNaN(trimmedValue)) {
-        toast.error("Please enter a valid numeric age.");
-        return;
-      }
-      ageString = `${trimmedValue} ${ageUnit}`;
+      setFilteredBrands(brandSuggestions);
     }
-    if (!ages.includes(ageString)) {
-      setAges((prev) => [...prev, ageString]);
-      setAgeValue("");
-    } else {
-      toast.error("This age entry already exists.");
-    }
+    setShowBrandSuggestions(true);
   };
 
-  const removeAge = (ageToRemove) => {
-    setAges((prev) => prev.filter((age) => age !== ageToRemove));
+  const handleBrandClick = (brand) => {
+    setName(brand);
+    setShowBrandSuggestions(false);
   };
 
-  // Filter subcategories as the user types.
+  // Handler for subcategory suggestions.
   const handleSubCategoryChange = (e) => {
     const value = e.target.value;
     setSubCategory(value);
@@ -184,25 +121,128 @@ const Add = ({ token }) => {
     setShowSubCategorySuggestions(false);
   };
 
-  // Add custom size from input, converting to uppercase.
-  const addSize = () => {
-    const trimmedSize = sizeInput.trim().toUpperCase();
-    if (trimmedSize && !sizes.includes(trimmedSize)) {
-      setSizes((prev) => [...prev, trimmedSize]);
-      setSizeInput("");
-    } else {
-      toast.error("Please enter a valid, unique size.");
+  // Unified variant handler.
+  const addVariant = () => {
+    if (!variantSize.trim() && !variantAge.trim()) {
+      toast.error("Please enter at least a size or an age for the variant.");
+      return;
     }
+    if (!variantQuantity.trim() || isNaN(variantQuantity) || !variantColor.trim()) {
+      toast.error("Please enter a valid quantity and color for the variant.");
+      return;
+    }
+    const newVariant = {
+      size: variantSize.trim() || null,
+      age: variantAge.trim() || null,
+      ageUnit: variantAge.trim() ? variantAgeUnit : null,
+      quantity: Number(variantQuantity),
+      color: variantColor.trim()
+    };
+    // Check for duplicates.
+    if (variants.find(v => v.size === newVariant.size && v.age === newVariant.age && v.color.toLowerCase() === newVariant.color.toLowerCase())) {
+      toast.error("This variant already exists.");
+      return;
+    }
+    setVariants([...variants, newVariant]);
+    // Clear variant inputs.
+    setVariantSize("");
+    setVariantAge("");
+    setVariantAgeUnit("Years");
+    setVariantQuantity("");
+    setVariantColor("");
   };
 
-  const removeSize = (sizeToRemove) => {
-    setSizes((prev) => prev.filter((s) => s !== sizeToRemove));
+  // Handlers for removing variants.
+  const removeVariant = (variantToRemove) => {
+    setVariants(prev => prev.filter(v => !(v.size === variantToRemove.size && v.age === variantToRemove.age && v.color.toLowerCase() === variantToRemove.color.toLowerCase())));
+  };
+
+  const onSubmitHandler = async (e) => {
+    e.preventDefault();
+
+    // Validate required fields and ensure at least one variant exists.
+    if (!name.trim() || !price || variants.length === 0) {
+      toast.error("Please fill in all required fields. At least one variant must be provided.");
+      return;
+    }
+
+    if (discountPrice && Number(discountPrice) >= Number(price)) {
+      toast.error("Discounted price must be less than the product price.");
+      return;
+    }
+
+    // Multiply price and discounted price by the combo value if provided.
+    let finalPrice = Number(price);
+    let finalDiscountPrice = discountPrice ? Number(discountPrice) : "";
+    if (combo) {
+      finalPrice *= Number(combo);
+      if (finalDiscountPrice) {
+        finalDiscountPrice *= Number(combo);
+      }
+    }
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("description", description);
+      formData.append("category", category);
+      formData.append("price", finalPrice);
+      if (finalDiscountPrice) {
+        formData.append("discountedPrice", finalDiscountPrice);
+      }
+      formData.append("subCategory", subCategory);
+      formData.append("bestseller", bestseller);
+      if (count) {
+        formData.append("count", count);
+      }
+      // Append the unified variants as a JSON string.
+      formData.append("variants", JSON.stringify(variants));
+
+      if (image1) formData.append("image1", image1);
+      if (image2) formData.append("image2", image2);
+      if (image3) formData.append("image3", image3);
+      if (image4) formData.append("image4", image4);
+
+      const response = await axios.post(
+        `${backendUrl}/api/product/add`,
+        formData,
+        { headers: { token } }
+      );
+      if (response.data.success) {
+        toast.success(response.data.message);
+        // Reset all fields
+        setName("");
+        setDescription("");
+        setImage1(null);
+        setImage2(null);
+        setImage3(null);
+        setImage4(null);
+        setPrice("");
+        setCombo("");
+        setDiscountPrice("");
+        setVariants([]);
+        setVariantSize("");
+        setVariantAge("");
+        setVariantAgeUnit("Years");
+        setVariantQuantity("");
+        setVariantColor("");
+        setSubCategory("");
+        setCount("");
+      } else {
+        toast.error(response.data.message);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message);
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="max-w-7xl mx-auto bg-white shadow-1xl rounded-lg p-4 md:p-8 animate-fadeIn">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-8 inline-block border-b-2 border-gray-300 pb-4 mx-auto">
+    <div className="max-w-7xl mx-auto bg-white shadow-lg rounded-lg p-4 md:p-8 animate-fadeIn">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold inline-block border-b-2 border-gray-300 pb-4">
           Add New Product
         </h1>
       </div>
@@ -211,7 +251,7 @@ const Add = ({ token }) => {
         {/* Upload Images */}
         <div>
           <p className="text-xl font-semibold mb-3">Upload Images</p>
-          <div className="flex gap-1 md:gap-6">
+          <div className="flex flex-wrap gap-4">
             {[
               { img: image1, setter: setImage1, id: "image1" },
               { img: image2, setter: setImage2, id: "image2" },
@@ -239,19 +279,34 @@ const Add = ({ token }) => {
           </div>
         </div>
 
-        {/* Product Name */}
-        <div>
+        {/* Brand Name with live suggestions */}
+        <div className="relative">
           <label className="block text-xl font-medium mb-2">
             Brand Name <span className="text-red-500">*</span>
           </label>
           <input
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
             type="text"
             placeholder="Enter brand name"
             required
-            onChange={(e) => setName(e.target.value)}
+            onChange={handleBrandChange}
+            onFocus={() => setShowBrandSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowBrandSuggestions(false), 150)}
             value={name}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition placeholder-gray-400"
           />
+          {showBrandSuggestions && filteredBrands.length > 0 && (
+            <div className="absolute top-full left-0 right-0 border border-gray-300 bg-white z-10 max-h-40 overflow-auto rounded-md">
+              {filteredBrands.map((brand, index) => (
+                <div
+                  key={index}
+                  className="px-4 py-2 cursor-pointer hover:bg-gray-100"
+                  onMouseDown={() => handleBrandClick(brand)}
+                >
+                  {brand}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Product Description */}
@@ -260,14 +315,14 @@ const Add = ({ token }) => {
             Product Description
           </label>
           <textarea
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
             placeholder="Enter product description"
             onChange={(e) => setDescription(e.target.value)}
             value={description}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition placeholder-gray-400"
           />
         </div>
 
-        {/* Price, Discount, Count */}
+        {/* Price, Combo and Discount */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-xl font-medium mb-2">
@@ -276,10 +331,10 @@ const Add = ({ token }) => {
             <input
               type="number"
               placeholder="e.g., 25"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
               onChange={(e) => setPrice(Number(e.target.value) || 0)}
               value={price}
               required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition placeholder-gray-400"
             />
           </div>
           <div>
@@ -289,27 +344,26 @@ const Add = ({ token }) => {
             <input
               type="number"
               placeholder="Optional"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
               onChange={(e) => setDiscountPrice(Number(e.target.value) || 0)}
               value={discountPrice}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition placeholder-gray-400"
             />
           </div>
           <div>
             <label className="block text-xl font-medium mb-2">
-              Product Count <span className="text-red-500">*</span>
+              Combo
             </label>
             <input
               type="number"
-              placeholder="e.g., 10"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
-              onChange={(e) => setCount(Number(e.target.value) || 0)}
-              value={count}
-              required
+              placeholder="Enter combo factor (optional)"
+              onChange={(e) => setCombo(Number(e.target.value) || "")}
+              value={combo}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition placeholder-gray-400"
             />
           </div>
         </div>
 
-        {/* Category, Subcategory & Color */}
+        {/* Category & Sub Category */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
           <div>
             <label className="block text-xl font-medium mb-2">
@@ -317,8 +371,8 @@ const Add = ({ token }) => {
             </label>
             <select
               onChange={(e) => setCategory(e.target.value)}
-              className="custom-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
               required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
             >
               <option value="Men">Men</option>
               <option value="Women">Women</option>
@@ -338,15 +392,13 @@ const Add = ({ token }) => {
                 setShowSubCategorySuggestions(true);
                 setFilteredSubCategories(subCategorySuggestions);
               }}
-              onBlur={() => {
-                setTimeout(() => setShowSubCategorySuggestions(false), 150);
-              }}
+              onBlur={() => setTimeout(() => setShowSubCategorySuggestions(false), 150)}
               value={subCategory}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition placeholder-gray-400"
             />
             {showSubCategorySuggestions && filteredSubCategories.length > 0 && (
-              <div className="absolute top-full left-0 right-0 border border-gray-300 bg-white z-10 max-h-40 overflow-auto">
+              <div className="absolute top-full left-0 right-0 border border-gray-300 bg-white z-10 max-h-40 overflow-auto rounded-md">
                 {filteredSubCategories.map((s, i) => (
                   <div
                     key={i}
@@ -359,122 +411,119 @@ const Add = ({ token }) => {
               </div>
             )}
           </div>
-          <div>
-            <label className="block text-xl font-medium mb-2">
-              Color <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="Enter product color"
-              required
-              onChange={(e) => setColor(e.target.value)}
-              value={color}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
-            />
-          </div>
-        </div>
-
-        {/* Sizes, Ages & Empty Column: Responsive Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {/* Sizes Section */}
-          <div>
-            <label className="block text-xl font-medium mb-2">
-              Product Sizes 
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="text"
-                placeholder="e.g., X, XXL, 42"
-                className="w-40 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
-                value={sizeInput}
-                onChange={(e) => setSizeInput(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={addSize}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg transition hover:bg-gray-800"
-              >
-                Add Size
-              </button>
-            </div>
-            <div className="flex flex-wrap mt-3">
-              {sizes.map((s, index) => (
-                <div
-                  key={index}
-                  onClick={() => removeSize(s)}
-                  className="cursor-pointer mr-1 mb-1"
-                  title="Click to remove"
-                >
-                  <p className="bg-gray-600 text-white px-3 py-1 rounded">{s}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Ages Section with Unit Selector */}
-          <div>
-            <label className="block text-xl font-medium mb-2">
-              Ages 
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="e.g., 3 or 3-4"
-                className="w-24 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
-                value={ageValue}
-                onChange={(e) => setAgeValue(e.target.value)}
-              />
-              <select
-                className="custom-select px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black transition"
-                value={ageUnit}
-                onChange={(e) => setAgeUnit(e.target.value)}
-              >
-                <option value="Years">Years</option>
-                <option value="Months">Months</option>
-              </select>
-              <button
-                type="button"
-                onClick={addAge}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg transition hover:bg-gray-800"
-              >
-                Add Age
-              </button>
-            </div>
-            <div className="flex flex-wrap mt-3">
-              {ages.map((age, index) => (
-                <div
-                  key={index}
-                  onClick={() => removeAge(age)}
-                  className="cursor-pointer mr-1 mb-1"
-                  title="Click to remove"
-                >
-                  <p className="bg-gray-600 text-white px-3 py-1 rounded">{age}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Empty Column */}
           <div></div>
         </div>
 
-        {/* Validation: Require at least one size or age */}
-        {sizes.length === 0 && ages.length === 0 && (
+        {/* Unified Variant Input Section */}
+        <div className="border p-4 rounded-lg shadow-sm space-y-4">
+          <h2 className="text-xl font-semibold">Add Variant</h2>
+          <p className="text-sm text-gray-600">
+            Enter at least a size or an age. If both are provided, they will be stored in a single variant entry.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-lg font-medium mb-1">Size (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g., X, M, L"
+                value={variantSize}
+                onChange={(e) => setVariantSize(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-lg font-medium mb-1">Age (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g., 3 or 3-4"
+                value={variantAge}
+                onChange={(e) => setVariantAge(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              />
+            </div>
+            {variantAge && (
+              <div>
+                <label className="block text-lg font-medium mb-1">Age Unit</label>
+                <select
+                  value={variantAgeUnit}
+                  onChange={(e) => setVariantAgeUnit(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+                >
+                  <option value="Years">Years</option>
+                  <option value="Months">Months</option>
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="block text-lg font-medium mb-1">Quantity</label>
+              <input
+                type="number"
+                placeholder="Enter quantity"
+                value={variantQuantity}
+                onChange={(e) => setVariantQuantity(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              />
+            </div>
+            <div>
+              <label className="block text-lg font-medium mb-1">Color</label>
+              <input
+                type="text"
+                placeholder="Enter color"
+                value={variantColor}
+                onChange={(e) => setVariantColor(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={addVariant}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-800"
+          >
+            Add Variant
+          </button>
+          {/* Display added variants */}
+          <div className="mt-4 space-y-2">
+            {variants.length > 0 && (
+              <div>
+                <p className="font-semibold">Variants</p>
+                <div className="flex flex-wrap gap-2">
+                  {variants.map((v, i) => (
+                    <div
+                      key={i}
+                      onClick={() => removeVariant(v)}
+                      className="flex items-center gap-1 bg-gray-600 text-white px-2 py-1 rounded cursor-pointer"
+                      title="Click to remove"
+                    >
+                      {v.size && <span>{v.size}</span>}
+                      {v.age && <span>{v.age} {v.ageUnit}</span>}
+                      <span>({v.quantity})</span>
+                      <span>[{v.color}]</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Validation: Require at least one variant */}
+        {variants.length === 0 && (
           <p className="mt-2 text-sm text-red-500">
-            Please add at least one size or one age.
+            Please add at least one variant.
           </p>
         )}
 
         {/* Bestseller */}
         <div className="flex items-center gap-4">
           <input
-            onChange={() => setBestseller((prev) => !prev)}
-            checked={bestseller}
             type="checkbox"
             id="bestseller"
+            checked={bestseller}
+            onChange={() => setBestseller((prev) => !prev)}
             className="w-5 h-5"
           />
-          <label className="cursor-pointer text-xl" htmlFor="bestseller">
+          <label htmlFor="bestseller" className="cursor-pointer text-xl">
             Add to Bestseller
           </label>
         </div>
@@ -482,8 +531,8 @@ const Add = ({ token }) => {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full md:w-32 flex justify-center items-center py-3 bg-green-500 text-white rounded-lg transition transform hover:scale-105 disabled:opacity-50"
           disabled={loading}
+          className="w-full md:w-32 flex justify-center items-center py-3 bg-green-500 text-white rounded-lg transition transform hover:scale-105 disabled:opacity-50"
         >
           {loading ? (
             <div className="w-6 h-6 border-4 border-dashed border-white rounded-full animate-spin"></div>
